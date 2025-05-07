@@ -1,0 +1,291 @@
+<!--
+ * @Author: Max great_maxwell@outlook.com
+ * @Date: 2025-02-01 00:02:04
+ * @LastEditors: Max great_maxwell@outlook.com
+ * @LastEditTime: 2025-05-07 14:10:24
+ * @FilePath: \web\index.html
+ * 
+-->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>web3d animation viewer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+        }
+
+        button {
+            margin: 5px;
+            padding: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        /* TODO */
+        #title {
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 2.5rem;
+            text-align: center;
+            z-index: 10;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+            letter-spacing: 3px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="title">Web3D Animation 284246</div>
+    <div id="controls">
+        <button id="openBottle1">Open Bottle 1</button>
+        <button id="squashBottle1">Squash Bottle 1</button>
+        <br>
+        <button id="openBottle2">Open Bottle 2</button>
+        <button id="squashBottle2">Squash Bottle 2</button>
+        <br>
+        <button id="openBottle3">Open Bottle 3</button>
+        <button id="squashBottle3">Squash Bottle 3</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://cdn.skypack.dev/three@0.128.0';
+        import { GLTFLoader } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/loaders/GLTFLoader.js';
+        import { AnimationMixer } from 'https://cdn.skypack.dev/three@0.128.0';
+        // add OrbitControls
+        import { OrbitControls } from 'https://cdn.skypack.dev/three@0.128.0/examples/jsm/controls/OrbitControls.js';
+        import { xf_addTexture, xf_repeatTexture } from './js/textureLoad.js'
+
+
+        // Basic scene setup
+        const scene = new THREE.Scene();
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+        const renderer = new THREE.WebGLRenderer({ canvas: document.createElement('canvas') });
+        document.body.appendChild(renderer.domElement);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        // hdr
+        let envMap = xf_addTexture('img/hdr3.jpg', true, 1);
+        scene.environment = envMap//hdr
+        renderer.toneMappingExposure = 1.5;
+        // Lighting setup
+        // const ambientLight = new THREE.AmbientLight(0x404040, 1);
+        // scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5); // Bright directional light
+        directionalLight.position.set(5, 5, 5).normalize();
+        scene.add(directionalLight);
+
+        // Loaders and other variables
+        const loader = new GLTFLoader();
+        let model, mixer;
+
+        // init OrbitControls
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; // Enable damping effect for smoother control
+        controls.dampingFactor = 0.05; // damping number
+
+        let isButtonClicked = false; // Add a flag to determine whether the button is clicked
+
+        // Define the camera position and target point corresponding to different buttons
+        const cameraSettings = {
+            'openBottle1': {
+                position: new THREE.Vector3(0, 0, 5),
+                target: new THREE.Vector3(0, 0, 0),
+                needReset: false // no needed to reset
+            },
+            'squashBottle1': {
+                position: new THREE.Vector3(1, 1, 6),
+                target: new THREE.Vector3(0, 0, 0),
+                needReset: false // no needed to reset
+            },
+            'openBottle2': {
+                position: new THREE.Vector3(0.30006381059731047, 0.7943251923230351, 0.49871030167914365),
+                target: new THREE.Vector3(0, 0.3, 0),
+                needReset: true // reset
+            },
+            'squashBottle2': {
+                position: new THREE.Vector3(0, -1, 5),
+                target: new THREE.Vector3(0, 0, 0),
+                needReset: false // no needed to reset
+            },
+            'openBottle3': {
+                position: new THREE.Vector3(1, -1, 5),
+                target: new THREE.Vector3(0, 0, 0),
+                needReset: false // no needed to reset
+            },
+            'squashBottle3': {
+                position: new THREE.Vector3(-1, -1, 6),
+                target: new THREE.Vector3(0, 0, 0),
+                needReset: false // no needed to reset
+            }
+        };
+
+        let currentButtonId = null; // record current button ID
+
+        // canera facing direction
+        function setCameraSettings(buttonId) {
+            const settings = cameraSettings[buttonId];
+            if (settings) {
+                currentButtonId = buttonId; // ID
+                if (settings.needReset) {
+                    camera.position.copy(settings.position);
+                    controls.target.copy(settings.target);
+                    camera.lookAt(controls.target);
+                    controls.update();
+                }
+            }
+        }
+
+        // Load a glTF model
+        function loadModel(file) {
+            loader.load(file, function (gltf) {
+                if (model) scene.remove(model); // Remove previous model if exists
+                model = gltf.scene;
+                scene.add(model);
+                model.scale.set(0.5, 0.5, 0.5); // Scale the model
+
+                // cal border
+                const box = new THREE.Box3().setFromObject(model);
+                const size = new THREE.Vector3();
+                box.getSize(size);
+                const center = new THREE.Vector3();
+                box.getCenter(center);
+
+                // move the model to(0,0,0)
+                model.position.sub(center);
+                model.position.y += size.y / 2;
+
+                const settings = currentButtonId ? cameraSettings[currentButtonId] : null;
+                if (!settings || !settings.needReset) {
+                    // when there is no button been pressed or needReset is false，use loadModel's camera setting logic
+                    controls.target.set(0, size.y / 2, 0);
+                    // modify camera location，make the model looks like in the middle of the screen
+                    const maxSize = Math.max(size.x, size.y, size.z);
+                    const fov = camera.fov * (Math.PI / 180);
+                    const distance = (maxSize / 2) / Math.tan(fov / 2);
+                    camera.position.copy(controls.target).add(new THREE.Vector3(0, 0, distance));
+                    // TODO
+                    camera.position.z += 0.5;
+                    camera.lookAt(controls.target);
+                    controls.update();
+                }
+
+                let modifiedMaterial;
+
+                model.traverse(function (child) {
+                    if (child.isMesh) {
+                        console.log(child.material.name);
+                        if (child.material.name === 'Material.003') {
+                            child.material = child.material.clone();
+                            console.log('child.material');
+
+                            child.material.depthTest = true;
+                            child.material.depthWrite = true;
+                            child.material.transparent = true;
+                            child.material.metalness = 0.55;
+
+                            // DEL
+                            // DEL
+                            modifiedMaterial = child.material;
+                        }
+
+                        // when loading 3s.glb，find Plastic_bottle001 and apply it
+                        if (file === '3s.glb' && child.name === 'Plastic_bottle001' && modifiedMaterial) {
+                            child.material = modifiedMaterial;
+                        }
+                    }
+                });
+
+                // Set up animation mixer
+                mixer = new AnimationMixer(model);
+
+                gltf.animations.forEach((clip) => {
+                    mixer.clipAction(clip).play();
+                });
+
+                console.log(`${file} loaded successfully`);
+                currentButtonId = null; // reset current button ID after the model loaded
+            }, undefined, function (error) {
+                console.error('Error loading model:', error);
+            });
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            if (mixer) mixer.update(0.01); // Update the mixer (animations)
+            // reset controler
+            controls.update();
+            renderer.render(scene, camera);
+            // console.log(camera.position);
+
+        }
+
+        // Call the animation loop
+        animate();
+
+        // Load initial model
+        loadModel('1open.glb'); // Default load '1open.glb'
+
+        // Set up button actions
+        document.getElementById('openBottle1').addEventListener('click', () => {
+            loadModel('1open.glb');
+            setCameraSettings('openBottle1');
+        });
+        document.getElementById('squashBottle1').addEventListener('click', () => {
+            loadModel('1s.glb');
+            setCameraSettings('squashBottle1');
+        });
+        document.getElementById('openBottle2').addEventListener('click', () => {
+            loadModel('2open.glb');
+            setCameraSettings('openBottle2');
+        });
+        document.getElementById('squashBottle2').addEventListener('click', () => {
+            loadModel('2s.glb');
+            setCameraSettings('squashBottle2');
+        });
+        document.getElementById('openBottle3').addEventListener('click', () => {
+            loadModel('3open.glb');
+            setCameraSettings('openBottle3');
+        });
+        document.getElementById('squashBottle3').addEventListener('click', () => {
+            loadModel('3s.glb');
+            setCameraSettings('squashBottle3');
+        });
+
+        // Adjust the camera position
+        camera.position.z = 5;
+
+        // Resize the renderer when the window size changes
+        window.addEventListener('resize', () => {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+
+</html>
