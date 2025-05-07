@@ -1,0 +1,1 @@
+## This project is for the H7006: Web 3D Applications assignment at the University of Sussex
